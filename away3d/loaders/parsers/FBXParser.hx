@@ -1,5 +1,6 @@
 package away3d.loaders.parsers;
 
+import away3d.materials.SinglePassMaterialBase;
 import openfl.errors.Error;
 import openfl.geom.Matrix3D;
 import openfl.geom.Vector3D;
@@ -23,15 +24,15 @@ import away3d.containers.Scene3D;
 
 class FBXParser extends ParserBase {
 	private var scale:Float = 1;
-	private var fbx_templates:Map<String,Dynamic>;
-	private var fbx_table_nodes:Array<FBXElem>;
+	private var fbx_templates:Map<String, Dynamic>;
+	private var fbx_table_nodes:Map<String, FBXElem>;
 	private var fbx_connections_map_reverse:Array<Dynamic>;
 	private var fbx_connections_map:Array<Dynamic>;
 	private var fbx_item:Array<Dynamic>;
 
 	private var _skeleton:Skeleton;
 	private var _skeletonPose:SkeletonPose;
-	private var fbx_helper_nodes:Array<Dynamic>;
+	private var fbx_helper_nodes:Map<String, Dynamic>;
 
 	public function new(filePath:String = "", use_manual_orientation:Bool = false, axis_forward:String = "-Z", axis_up:String = "Y", global_scale:Float = 1,
 			use_custom_normals:Bool = true, use_ani:Bool = true, anim_offset:Float = 1, use_custom_props:Bool = true,
@@ -98,15 +99,17 @@ class FBXParser extends ParserBase {
 		}
 		trace("FBX import: Nodes...");
 		for (fbx_obj /* AS3HX WARNING could not determine type for var: fbx_obj exp: EField(EIdent(fbx_nodes),elems) type: null */ in fbx_nodes.elems) {
-            trace("node===",fbx_obj);
-            if ((fbx_obj.props_type[0] == "L") && (fbx_obj.props_type[1] == "S") && (fbx_obj.props_type[2] == "S")) {
-				var fbx_uuid:Float = this.elem_uuid(fbx_obj);
-				Reflect.setField(fbx_table_nodes, Std.string(fbx_uuid), (fbx_obj != null) ? fbx_obj : null);
+			trace("node===", fbx_obj);
+			if ((fbx_obj.props_type[0] == "L") && (fbx_obj.props_type[1] == "S") && (fbx_obj.props_type[2] == "S")) {
+				var fbx_uuid:String = this.elem_uuid(fbx_obj);
+				trace(fbx_uuid);
+				fbx_table_nodes[fbx_uuid] = (fbx_obj != null) ? fbx_obj : null;
 			}
 		}
+		trace("fbx_table_nodes === ", fbx_table_nodes);
 		trace("FBX import: Connections...");
-		var fbx_connections_map1:Dictionary<String,Dynamic> = new Dictionary<String,Dynamic>();
-		var fbx_connections_map1_reverse:Dictionary<String,Dynamic> = new Dictionary<String,Dynamic>();
+		var fbx_connections_map1:Dictionary<String, Dynamic> = new Dictionary<String, Dynamic>();
+		var fbx_connections_map1_reverse:Dictionary<String, Dynamic> = new Dictionary<String, Dynamic>();
 
 		fbx_connections_map = [];
 		fbx_connections_map_reverse = [];
@@ -116,7 +119,7 @@ class FBXParser extends ParserBase {
 				var src:Int = Std.parseInt(fbx_link.props[1]);
 				var dst:Int = Std.parseInt(fbx_link.props[2]);
 
-                //TODO 需要兼容
+				// TODO 需要兼容
 				// Reflect.setField(fbx_connections_map1, Std.string(src), new Dictionary());
 				// Reflect.setField(fbx_connections_map1, Std.string(src), fbx_link)[dst];
 				// Reflect.setField(fbx_connections_map1_reverse, Std.string(dst), new Dictionary());
@@ -155,6 +158,7 @@ class FBXParser extends ParserBase {
 				continue;
 			}
 			trace("Read Material");
+			// TODO
 			this.finalizeAsset(this.readMaterial(fbx_template, fbx_obj, settings));
 			this.proceedParsing();
 		}
@@ -186,7 +190,7 @@ class FBXParser extends ParserBase {
 		this.fbx_helper_nodes = [];
 		var root_helper:FBXImportHelperNode = new FBXImportHelperNode(null, null, null, false);
 		root_helper.is_root = true;
-		this.fbx_helper_nodes[0] = root_helper;
+		this.fbx_helper_nodes["0"] = root_helper;
 
 		var fbx_template:FBXElem = this.fbxTemplateGet("ModelFbxNode");
 		if (fbx_template != null) {
@@ -210,8 +214,8 @@ class FBXParser extends ParserBase {
 				continue;
 			}
 			if ((fbx_link.props_type[1] == "L") && (fbx_link.props_type[2] == "L")) {
-				var c_src:Int = Std.parseInt(fbx_link.props[1]);
-				var c_dst:Int = Std.parseInt(fbx_link.props[2]);
+				var c_src:String = Std.string(fbx_link.props[1]);
+				var c_dst:String = Std.string(fbx_link.props[2]);
 				var parent:FBXImportHelperNode = this.fbx_helper_nodes[c_dst];
 				if (parent == null) {
 					continue;
@@ -253,10 +257,10 @@ class FBXParser extends ParserBase {
 				}
 
 				var node_elem:FBXElem = this.elemFindFirst(fbx_pose_node, "Node");
-				var node:Float = this.elem_uuid(node_elem);
+				var node:String = this.elem_uuid(node_elem);
 				var matrix_elem:FBXElem = this.elemFindFirst(fbx_pose_node, "Matrix");
 				var matrix:Matrix3D = null;
-				var bone:FBXImportHelperNode = this.fbx_helper_nodes[Std.int(node)];
+				var bone:FBXImportHelperNode = this.fbx_helper_nodes[node];
 				if ((bone != null) && (matrix != null)) {
 					bone.bind_matrix = matrix;
 				}
@@ -265,68 +269,70 @@ class FBXParser extends ParserBase {
 		for (helper_uuid => helper_node in (this.fbx_helper_nodes)) {
 			if (!helper_node.is_bone) {
 				continue;
-            }
-            var array:Array<Dynamic> = Reflect.field(fbx_connections_map1, Std.string(helper_uuid));
-			for (cluster_uuid => cluster_link in array) {
-				if (cluster_link.props[0] != "OO") {
-					continue;
-				}
-				var fbx_cluster:FBXElem = this.fbx_table_nodes[cluster_uuid];
-				if ((fbx_cluster != null) && (fbx_cluster.id != "Deformer") || (fbx_cluster != null) && (fbx_cluster.props[2] != "Cluster")) {
-					continue;
-				}
-				var tx_mesh_elem:FBXElem = this.elemFindFirst(fbx_cluster, "Transform", null);
-				var tx_mesh:Matrix3D = this.array_to_matrix4(Std.string(tx_mesh_elem.props[0]), new Matrix3D());
-				var tx_bone_elem:FBXElem = this.elemFindFirst(fbx_cluster, "TransformLink", null);
-				var tx_bone:Matrix3D = this.array_to_matrix4(Std.string(tx_bone_elem.props[0]), null);
-				var tx_arm_elem:FBXElem = this.elemFindFirst(fbx_cluster, "TransformAssociateModel", null);
-				var tx_arm:Matrix3D = null;
-				if (tx_arm_elem != null) {
-					tx_arm = this.array_to_matrix4(Std.string(tx_arm_elem.props[0]), null);
-				}
-				var mesh_matrix:Matrix3D = tx_mesh;
-				var armature_matrix:Matrix3D = tx_arm;
-				if (tx_bone != null) {
-					mesh_matrix = tx_bone;
-					helper_node.bind_matrix = tx_bone;
-				}
-                var meshes:Array<FBXImportHelperNode> = new Array<FBXImportHelperNode>();
-                trace("fbx_connections_map1 ===",fbx_connections_map1);
-				for (skin_uuid in Reflect.fields(Reflect.field(fbx_connections_map1, Std.string(cluster_uuid)))) {
-                    //TODO 需要兼容
-                    var skin_link:FBXElem = null;
-                    //  Reflect.field(fbx_connections_map1, cluster_uuid)[Std.parseInt(skin_uuid)];
-					if (skin_link.props[0] != "OO") {
-						continue;
-					}
-					var fbx_skin:FBXElem = this.fbx_table_nodes[Std.parseInt(skin_uuid)];
-					if ((fbx_skin != null) && (fbx_skin.id != "Deformer") || (fbx_skin != null) && (fbx_skin.props[2] != "Skin")) {
-						continue;
-					}
-					for (mesh_uuid in Reflect.fields(Reflect.field(fbx_connections_map1, skin_uuid))) {
-						var mesh_link:FBXElem = Reflect.field(fbx_connections_map1, skin_uuid)[Std.parseInt(mesh_uuid)];
-						if (mesh_link.props[0] != "OO") {
-							continue;
-						}
-						var fbx_mesh:FBXElem = this.fbx_table_nodes[Std.parseInt(mesh_uuid)];
-						if ((fbx_mesh != null) && (fbx_mesh.id != "Geometry") || (fbx_mesh != null) && (fbx_mesh.props[2] != "Mesh")) {
-							continue;
-						}
-						for (object_uuid in Reflect.fields(Reflect.field(fbx_connections_map1, mesh_uuid))) {
-							var object_link:FBXElem = Reflect.field(fbx_connections_map1, mesh_uuid)[Std.parseInt(object_uuid)];
-							if (object_link.props[0] != "OO") {
-								continue;
-							}
-							var mesh_node:FBXImportHelperNode = this.fbx_helper_nodes[Std.parseInt(object_uuid)];
-							if (mesh_node != null) {
-								mesh_node.armature_setup[helper_node.armature] = mesh_matrix;
-								meshes.push(mesh_node);
-							}
-						}
-					}
-				}
-				cast(helper_node.clusters,Array<Dynamic>).push([fbx_cluster, meshes]);
 			}
+			trace("fbx_connections_map1 === ", fbx_connections_map1);
+			var array:Array<Dynamic> = Reflect.field(fbx_connections_map1, Std.string(helper_uuid));
+			// TODO需要兼容
+			// 	for (cluster_uuid => cluster_link in array) {
+			// 		if (cluster_link.props[0] != "OO") {
+			// 			continue;
+			// 		}
+			// 		var fbx_cluster:FBXElem = this.fbx_table_nodes[cluster_uuid];
+			// 		if ((fbx_cluster != null) && (fbx_cluster.id != "Deformer") || (fbx_cluster != null) && (fbx_cluster.props[2] != "Cluster")) {
+			// 			continue;
+			// 		}
+			// 		var tx_mesh_elem:FBXElem = this.elemFindFirst(fbx_cluster, "Transform", null);
+			// 		var tx_mesh:Matrix3D = this.array_to_matrix4(Std.string(tx_mesh_elem.props[0]), new Matrix3D());
+			// 		var tx_bone_elem:FBXElem = this.elemFindFirst(fbx_cluster, "TransformLink", null);
+			// 		var tx_bone:Matrix3D = this.array_to_matrix4(Std.string(tx_bone_elem.props[0]), null);
+			// 		var tx_arm_elem:FBXElem = this.elemFindFirst(fbx_cluster, "TransformAssociateModel", null);
+			// 		var tx_arm:Matrix3D = null;
+			// 		if (tx_arm_elem != null) {
+			// 			tx_arm = this.array_to_matrix4(Std.string(tx_arm_elem.props[0]), null);
+			// 		}
+			// 		var mesh_matrix:Matrix3D = tx_mesh;
+			// 		var armature_matrix:Matrix3D = tx_arm;
+			// 		if (tx_bone != null) {
+			// 			mesh_matrix = tx_bone;
+			// 			helper_node.bind_matrix = tx_bone;
+			// 		}
+			//         var meshes:Array<FBXImportHelperNode> = new Array<FBXImportHelperNode>();
+			//         trace("fbx_connections_map1 ===",fbx_connections_map1);
+			// 		for (skin_uuid in Reflect.fields(Reflect.field(fbx_connections_map1, Std.string(cluster_uuid)))) {
+			//             //TODO 需要兼容
+			//             var skin_link:FBXElem = null;
+			//             //  Reflect.field(fbx_connections_map1, cluster_uuid)[Std.parseInt(skin_uuid)];
+			// 			if (skin_link.props[0] != "OO") {
+			// 				continue;
+			// 			}
+			// 			var fbx_skin:FBXElem = this.fbx_table_nodes[Std.parseInt(skin_uuid)];
+			// 			if ((fbx_skin != null) && (fbx_skin.id != "Deformer") || (fbx_skin != null) && (fbx_skin.props[2] != "Skin")) {
+			// 				continue;
+			// 			}
+			// 			for (mesh_uuid in Reflect.fields(Reflect.field(fbx_connections_map1, skin_uuid))) {
+			// 				var mesh_link:FBXElem = Reflect.field(fbx_connections_map1, skin_uuid)[Std.parseInt(mesh_uuid)];
+			// 				if (mesh_link.props[0] != "OO") {
+			// 					continue;
+			// 				}
+			// 				var fbx_mesh:FBXElem = this.fbx_table_nodes[Std.parseInt(mesh_uuid)];
+			// 				if ((fbx_mesh != null) && (fbx_mesh.id != "Geometry") || (fbx_mesh != null) && (fbx_mesh.props[2] != "Mesh")) {
+			// 					continue;
+			// 				}
+			// 				for (object_uuid in Reflect.fields(Reflect.field(fbx_connections_map1, mesh_uuid))) {
+			// 					var object_link:FBXElem = Reflect.field(fbx_connections_map1, mesh_uuid)[Std.parseInt(object_uuid)];
+			// 					if (object_link.props[0] != "OO") {
+			// 						continue;
+			// 					}
+			// 					var mesh_node:FBXImportHelperNode = this.fbx_helper_nodes[Std.parseInt(object_uuid)];
+			// 					if (mesh_node != null) {
+			// 						mesh_node.armature_setup[helper_node.armature] = mesh_matrix;
+			// 						meshes.push(mesh_node);
+			// 					}
+			// 				}
+			// 			}
+			// 		}
+			// 		cast(helper_node.clusters,Array<Dynamic>).push([fbx_cluster, meshes]);
+			// 	}
 		}
 		root_helper.make_bind_pose_local();
 		root_helper.collect_armature_meshes();
@@ -339,18 +345,18 @@ class FBXParser extends ParserBase {
 		trace("FBX import: Animations...");
 		var fbx_template_astack:FBXElem = this.fbxTemplateGet("AnimationStackFbxAnimStack");
 		var fbx_template_alayer:FBXElem = this.fbxTemplateGet("AnimationLayerFbxAnimLayer");
-        var stacks:Array<Dynamic> = [];
+		var stacks:Map<String, Dynamic> = [];
 		for (key => fbx_asdata in this.fbx_table_nodes) {
-            trace("???=",fbx_asdata);
+			// trace("???=",fbx_asdata);
 			if ((fbx_asdata.id != "AnimationStack") || (fbx_asdata.props[2] != "")) {
 				continue;
-            }
-            stacks[key] = fbx_asdata;
+			}
+			stacks[key] = fbx_asdata;
 			trace(fbx_asdata.id);
 		}
 
-        trace("FBX import: Assign Materials...");
-        //TODO 需要兼容
+		trace("FBX import: Assign Materials...");
+		// TODO 需要兼容
 		// for (fbx_obj in this.fbx_table_nodes) {
 		// 	if (fbx_obj.id != "Geometry") {
 		// 		continue;
@@ -406,8 +412,8 @@ class FBXParser extends ParserBase {
 		return new FBXElem("", null, null, root_elems);
 	}
 
-	private function elem_uuid(elem:FBXElem):Float {
-		return Std.parseFloat(elem.props[0]);
+	private function elem_uuid(elem:FBXElem):String {
+		return Std.string(elem.props[0]);
 	}
 
 	private function read_elem(buffer:ByteArray, position:Int):FBXElem {
@@ -595,8 +601,7 @@ class FBXParser extends ParserBase {
 		if (elemProp != null) {
 			if (elemProp.props[0] == elemPropId) {
 				if ((elemProp.props[1] == "Color") && (elemProp.props[2] == "") || (elemProp.props[1] == "ColorRGB") && (elemProp.props[2] == "Color")) {
-					return this.combineRGB(Std.parseInt(elemProp.props[4]), Std.parseInt(elemProp.props[5]),
-						Std.parseInt(elemProp.props[6]));
+					return this.combineRGB(Std.parseInt(elemProp.props[4]), Std.parseInt(elemProp.props[5]), Std.parseInt(elemProp.props[6]));
 				}
 			}
 		}
@@ -611,8 +616,7 @@ class FBXParser extends ParserBase {
 			&& (elemProp.props_type[5] == "F")
 			&& (elemProp.props_type[6] == "F"))
 			|| ((elemProp != null) && (elemProp.props_type[4] == "D") && (elemProp.props_type[5] == "D") && (elemProp.props_type[6] == "D"))) {
-			return new Vector3D(Std.parseFloat(elemProp.props[4]), Std.parseFloat(elemProp.props[5]),
-				Std.parseFloat(elemProp.props[6]));
+			return new Vector3D(Std.parseFloat(elemProp.props[4]), Std.parseFloat(elemProp.props[5]), Std.parseFloat(elemProp.props[6]));
 		}
 		return v;
 	}
@@ -815,10 +819,10 @@ class FBXParser extends ParserBase {
 	private function readShape():Void {}
 
 	private function readMaterial(fbx_template:FBXElem, fbx_obj:FBXElem, settings:FBXImportSettings):MaterialBase {
-		var ma:MaterialBase = new MaterialBase();
+		var ma:SinglePassMaterialBase = new SinglePassMaterialBase();
 		var consts_color_white:Int = 0xffffff;
 		var fbx_props:FBXElem = this.elemFindFirst(fbx_template, "Properties70");
-		trace(fbx_props.props);
+		trace(fbx_props, fbx_obj, settings);
 		return ma;
 	}
 
@@ -939,7 +943,7 @@ class FBXUtils {
 				uuid = -uuid;
 			}
 			if (uuid >= 2 * 63) {
-				uuid = Std.int(uuid/2);
+				uuid = Std.int(uuid / 2);
 			}
 		}
 		if (uuid > 1e9) {
@@ -1266,8 +1270,8 @@ class FBXImportHelperNode {
 		if ((this.is_bone) || (this.fbx_elem != null)) {
 			return null;
 		}
-        var elem_name:String = this.fbx_name;
-        return null;
+		var elem_name:String = this.fbx_name;
+		return null;
 	}
 
 	public function build_skeleton_children(fbx_template:FBXElem, settings:FBXImportSettings):Void {}
@@ -1306,7 +1310,7 @@ class FBXImportHelperNode {
 	public function link_hierarchy(fbx_template:FBXElem, settings:FBXImportSettings, scene:Scene3D):Void {
 		if (this.is_armature) {
 			var arm:Dynamic = this.bl_obj;
-            // link bone children
+			// link bone children
 			for (i in 0...this.children.length) {
 				var child:FBXImportHelperNode = this.children[i];
 			}
