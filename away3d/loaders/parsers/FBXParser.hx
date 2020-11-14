@@ -142,7 +142,7 @@ class FBXParser extends ParserBase {
 				if (fbx_item.id == "Geometry") {
 					if (fbx_item.props[2] == "Mesh") {
 						this.finalizeAsset(this.readGeom(fbx_template, fbx_item, settings));
-						this.proceedParsing();
+						// this.proceedParsing();
 					}
 				}
 			}
@@ -156,7 +156,7 @@ class FBXParser extends ParserBase {
 			trace("Read Material");
 			// TODO
 			this.finalizeAsset(this.readMaterial(fbx_template, fbx_obj, settings));
-			this.proceedParsing();
+			// this.proceedParsing();
 		}
 
 		trace("FBX import: Cameras & Lamps");
@@ -167,7 +167,7 @@ class FBXParser extends ParserBase {
 			}
 			if (fbx_obj.props[2] == "Camera") {
 				this.finalizeAsset(this.readCamera(fbx_template, fbx_obj, 1));
-				this.proceedParsing();
+				// this.proceedParsing();
 			}
 		}
 
@@ -178,7 +178,7 @@ class FBXParser extends ParserBase {
 			}
 			if (fbx_obj.props[2] == "Light") {
 				this.finalizeAsset(this.readLight(fbx_template, fbx_obj, 1));
-				this.proceedParsing();
+				// this.proceedParsing();
 			}
 		}
 
@@ -362,7 +362,9 @@ class FBXParser extends ParserBase {
 
 		trace("FBX import: Assign Textures...");
 
-		trace("FBX import: Finished...");
+        trace("FBX import: Finished...");
+        this.proceedParsing();
+        this.finishParsing();
 	}
 
 	private function array_to_matrix4(indata:String, def:Dynamic):Matrix3D {
