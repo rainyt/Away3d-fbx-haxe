@@ -26,8 +26,8 @@ class FBXParser extends ParserBase {
 	private var scale:Float = 1;
 	private var fbx_templates:Map<String, Dynamic>;
 	private var fbx_table_nodes:Map<String, FBXElem>;
-	private var fbx_connections_map_reverse:Array<Dynamic>;
-	private var fbx_connections_map:Array<Dynamic>;
+	private var fbx_connections_map_reverse:Map<String, Dynamic>;
+	private var fbx_connections_map:Map<String, Dynamic>;
 	private var fbx_item:Array<Dynamic>;
 
 	private var _skeleton:Skeleton;
@@ -99,31 +99,27 @@ class FBXParser extends ParserBase {
 		}
 		trace("FBX import: Nodes...");
 		for (fbx_obj /* AS3HX WARNING could not determine type for var: fbx_obj exp: EField(EIdent(fbx_nodes),elems) type: null */ in fbx_nodes.elems) {
-			trace("node===", fbx_obj);
 			if ((fbx_obj.props_type[0] == "L") && (fbx_obj.props_type[1] == "S") && (fbx_obj.props_type[2] == "S")) {
 				var fbx_uuid:String = this.elem_uuid(fbx_obj);
-				trace(fbx_uuid);
 				fbx_table_nodes[fbx_uuid] = (fbx_obj != null) ? fbx_obj : null;
 			}
 		}
-		trace("fbx_table_nodes === ", fbx_table_nodes);
 		trace("FBX import: Connections...");
-		var fbx_connections_map1:Dictionary<String, Dynamic> = new Dictionary<String, Dynamic>();
-		var fbx_connections_map1_reverse:Dictionary<String, Dynamic> = new Dictionary<String, Dynamic>();
+		var fbx_connections_map1:Map<String, Map<String, Dynamic>> = new Map<String, Map<String, Dynamic>>();
+		var fbx_connections_map1_reverse:Map<String, Map<String, Dynamic>> = new Map<String, Map<String, Dynamic>>();
 
 		fbx_connections_map = [];
 		fbx_connections_map_reverse = [];
 		for (fbx_link /* AS3HX WARNING could not determine type for var: fbx_link exp: EField(EIdent(fbx_connections),elems) type: null */ in fbx_connections.elems) {
 			var c_type:String = Std.string(fbx_link.props[0]);
 			if ((fbx_link.props_type[1] == "L") && (fbx_link.props_type[2] == "L")) {
-				var src:Int = Std.parseInt(fbx_link.props[1]);
-				var dst:Int = Std.parseInt(fbx_link.props[2]);
+				var src:String = Std.string(fbx_link.props[1]);
+				var dst:String = Std.string(fbx_link.props[2]);
 
-				// TODO 需要兼容
-				// Reflect.setField(fbx_connections_map1, Std.string(src), new Dictionary());
-				// Reflect.setField(fbx_connections_map1, Std.string(src), fbx_link)[dst];
-				// Reflect.setField(fbx_connections_map1_reverse, Std.string(dst), new Dictionary());
-				// Reflect.setField(fbx_connections_map1_reverse, Std.string(dst), fbx_link)[src];
+				fbx_connections_map1[src] = new Map<String, Dynamic>();
+				fbx_connections_map1[src][dst] = fbx_link;
+				fbx_connections_map1_reverse[src] = new Map<String, Dynamic>();
+				fbx_connections_map1_reverse[src][dst] = fbx_link;
 
 				// fbx_connections_map1[dst] = fbx_link;
 				// fbx_connections_map1_reverse[dst] = new Dictionary();
@@ -270,69 +266,66 @@ class FBXParser extends ParserBase {
 			if (!helper_node.is_bone) {
 				continue;
 			}
-			trace("fbx_connections_map1 === ", fbx_connections_map1);
-			var array:Array<Dynamic> = Reflect.field(fbx_connections_map1, Std.string(helper_uuid));
-			// TODO需要兼容
-			// 	for (cluster_uuid => cluster_link in array) {
-			// 		if (cluster_link.props[0] != "OO") {
-			// 			continue;
-			// 		}
-			// 		var fbx_cluster:FBXElem = this.fbx_table_nodes[cluster_uuid];
-			// 		if ((fbx_cluster != null) && (fbx_cluster.id != "Deformer") || (fbx_cluster != null) && (fbx_cluster.props[2] != "Cluster")) {
-			// 			continue;
-			// 		}
-			// 		var tx_mesh_elem:FBXElem = this.elemFindFirst(fbx_cluster, "Transform", null);
-			// 		var tx_mesh:Matrix3D = this.array_to_matrix4(Std.string(tx_mesh_elem.props[0]), new Matrix3D());
-			// 		var tx_bone_elem:FBXElem = this.elemFindFirst(fbx_cluster, "TransformLink", null);
-			// 		var tx_bone:Matrix3D = this.array_to_matrix4(Std.string(tx_bone_elem.props[0]), null);
-			// 		var tx_arm_elem:FBXElem = this.elemFindFirst(fbx_cluster, "TransformAssociateModel", null);
-			// 		var tx_arm:Matrix3D = null;
-			// 		if (tx_arm_elem != null) {
-			// 			tx_arm = this.array_to_matrix4(Std.string(tx_arm_elem.props[0]), null);
-			// 		}
-			// 		var mesh_matrix:Matrix3D = tx_mesh;
-			// 		var armature_matrix:Matrix3D = tx_arm;
-			// 		if (tx_bone != null) {
-			// 			mesh_matrix = tx_bone;
-			// 			helper_node.bind_matrix = tx_bone;
-			// 		}
-			//         var meshes:Array<FBXImportHelperNode> = new Array<FBXImportHelperNode>();
-			//         trace("fbx_connections_map1 ===",fbx_connections_map1);
-			// 		for (skin_uuid in Reflect.fields(Reflect.field(fbx_connections_map1, Std.string(cluster_uuid)))) {
-			//             //TODO 需要兼容
-			//             var skin_link:FBXElem = null;
-			//             //  Reflect.field(fbx_connections_map1, cluster_uuid)[Std.parseInt(skin_uuid)];
-			// 			if (skin_link.props[0] != "OO") {
-			// 				continue;
-			// 			}
-			// 			var fbx_skin:FBXElem = this.fbx_table_nodes[Std.parseInt(skin_uuid)];
-			// 			if ((fbx_skin != null) && (fbx_skin.id != "Deformer") || (fbx_skin != null) && (fbx_skin.props[2] != "Skin")) {
-			// 				continue;
-			// 			}
-			// 			for (mesh_uuid in Reflect.fields(Reflect.field(fbx_connections_map1, skin_uuid))) {
-			// 				var mesh_link:FBXElem = Reflect.field(fbx_connections_map1, skin_uuid)[Std.parseInt(mesh_uuid)];
-			// 				if (mesh_link.props[0] != "OO") {
-			// 					continue;
-			// 				}
-			// 				var fbx_mesh:FBXElem = this.fbx_table_nodes[Std.parseInt(mesh_uuid)];
-			// 				if ((fbx_mesh != null) && (fbx_mesh.id != "Geometry") || (fbx_mesh != null) && (fbx_mesh.props[2] != "Mesh")) {
-			// 					continue;
-			// 				}
-			// 				for (object_uuid in Reflect.fields(Reflect.field(fbx_connections_map1, mesh_uuid))) {
-			// 					var object_link:FBXElem = Reflect.field(fbx_connections_map1, mesh_uuid)[Std.parseInt(object_uuid)];
-			// 					if (object_link.props[0] != "OO") {
-			// 						continue;
-			// 					}
-			// 					var mesh_node:FBXImportHelperNode = this.fbx_helper_nodes[Std.parseInt(object_uuid)];
-			// 					if (mesh_node != null) {
-			// 						mesh_node.armature_setup[helper_node.armature] = mesh_matrix;
-			// 						meshes.push(mesh_node);
-			// 					}
-			// 				}
-			// 			}
-			// 		}
-			// 		cast(helper_node.clusters,Array<Dynamic>).push([fbx_cluster, meshes]);
-			// 	}
+			var array:Map<String, Dynamic> = fbx_connections_map1[helper_uuid];
+			// TODO
+			for (cluster_uuid => cluster_link in array) {
+				if (cluster_link.props[0] != "OO") {
+					continue;
+				}
+				var fbx_cluster:FBXElem = this.fbx_table_nodes[cluster_uuid];
+				if ((fbx_cluster != null) && (fbx_cluster.id != "Deformer") || (fbx_cluster != null) && (fbx_cluster.props[2] != "Cluster")) {
+					continue;
+				}
+				var tx_mesh_elem:FBXElem = this.elemFindFirst(fbx_cluster, "Transform", null);
+				var tx_mesh:Matrix3D = this.array_to_matrix4(Std.string(tx_mesh_elem.props[0]), new Matrix3D());
+				var tx_bone_elem:FBXElem = this.elemFindFirst(fbx_cluster, "TransformLink", null);
+				var tx_bone:Matrix3D = this.array_to_matrix4(Std.string(tx_bone_elem.props[0]), null);
+				var tx_arm_elem:FBXElem = this.elemFindFirst(fbx_cluster, "TransformAssociateModel", null);
+				var tx_arm:Matrix3D = null;
+				if (tx_arm_elem != null) {
+					tx_arm = this.array_to_matrix4(Std.string(tx_arm_elem.props[0]), null);
+				}
+				var mesh_matrix:Matrix3D = tx_mesh;
+				var armature_matrix:Matrix3D = tx_arm;
+				if (tx_bone != null) {
+					mesh_matrix = tx_bone;
+					helper_node.bind_matrix = tx_bone;
+				}
+				var meshes:Array<FBXImportHelperNode> = new Array<FBXImportHelperNode>();
+				var skins:Map<String, Dynamic> = fbx_connections_map1[cluster_uuid];
+				for (skin_uuid => skin_link in skins) {
+					// TODO
+					if (skin_link.props[0] != "OO") {
+						continue;
+					}
+					var fbx_skin:FBXElem = this.fbx_table_nodes[skin_uuid];
+					if ((fbx_skin != null) && (fbx_skin.id != "Deformer") || (fbx_skin != null) && (fbx_skin.props[2] != "Skin")) {
+						continue;
+					}
+					var meshs = fbx_connections_map1[skin_uuid];
+					for (mesh_uuid => mesh_link in meshs) {
+						if (mesh_link.props[0] != "OO") {
+							continue;
+						}
+						var fbx_mesh:FBXElem = this.fbx_table_nodes[mesh_uuid];
+						if ((fbx_mesh != null) && (fbx_mesh.id != "Geometry") || (fbx_mesh != null) && (fbx_mesh.props[2] != "Mesh")) {
+							continue;
+						}
+						var objects = fbx_connections_map1[mesh_uuid];
+						for (object_uuid => object_link in objects) {
+							if (object_link.props[0] != "OO") {
+								continue;
+							}
+							var mesh_node:FBXImportHelperNode = this.fbx_helper_nodes[(object_uuid)];
+							if (mesh_node != null) {
+								mesh_node.armature_setup[helper_node.armature] = mesh_matrix;
+								meshes.push(mesh_node);
+							}
+						}
+					}
+				}
+				cast(helper_node.clusters, Array<Dynamic>).push([fbx_cluster, meshes]);
+			}
 		}
 		root_helper.make_bind_pose_local();
 		root_helper.collect_armature_meshes();
@@ -822,7 +815,6 @@ class FBXParser extends ParserBase {
 		var ma:SinglePassMaterialBase = new SinglePassMaterialBase();
 		var consts_color_white:Int = 0xffffff;
 		var fbx_props:FBXElem = this.elemFindFirst(fbx_template, "Properties70");
-		trace(fbx_props, fbx_obj, settings);
 		return ma;
 	}
 
